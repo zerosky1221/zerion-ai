@@ -40,8 +40,8 @@
   "homepage": "https://github.com/zeriontech/zerion-ai#readme",
   "license": "MIT",
   "dependencies": {
-    "@x402/fetch": "^0.1.0",
-    "@x402/evm": "^0.1.0",
+    "@x402/fetch": "^2.6.0",
+    "@x402/evm": "^2.6.0",
     "viem": "^2.0.0"
   }
 }
