@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.2](https://github.com/zeriontech/zerion-ai/compare/v0.4.1...v0.4.2) (2026-04-17)
+
+
+### Bug Fixes
+
+* add npm install to release workflow ([040b734](https://github.com/zeriontech/zerion-ai/commit/040b73457113d2c07e547eab818ffecc56cada4a))
+* add npm install to release workflow before tests ([0abcc76](https://github.com/zeriontech/zerion-ai/commit/0abcc767ed73293240021a3739baa81392a744c6))
+
 ## [0.4.1](https://github.com/zeriontech/zerion-ai/compare/v0.4.0...v0.4.1) (2026-04-17)
 
 
