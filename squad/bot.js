@@ -1788,24 +1788,3 @@ export async function maybeExecute(ctx, proposal) {
   } else {
     const reason = extractFailureReason(result.reason);
     await ctx.api.editMessageText(
-      progressMsg.chat.id,
-      progressMsg.message_id,
-      `🔴 <b>Failed</b>  ·  <code>${esc(proposal.id)}</code>\n` +
-        `<blockquote>${esc(reason.slice(0, 400))}</blockquote>`,
-      editOptions
-    );
-  }
-}
-
-export async function tickHousekeeping() {
-  try {
-    expireOverdue();
-    const recovered = sweepStaleExecuting();
-    if (recovered > 0) {
-      console.warn(`[tick] recovered ${recovered} stuck executing proposal(s)`);
-    }
-  } catch (err) {
-    console.error("[tick]", err);
-  }
-}
-
