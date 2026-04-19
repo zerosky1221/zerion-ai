@@ -1,6 +1,6 @@
 {
   "name": "zerion-cli",
-  "version": "0.4.2",
+  "version": "1.0.0",
   "description": "Zerion for AI agents and developers: hosted MCP docs, wallet-analysis skill, a JSON-first CLI, and the Squad Treasury multi-sig Telegram agent.",
   "author": "Zerion",
   "type": "module",
