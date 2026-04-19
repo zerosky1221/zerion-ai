@@ -73,6 +73,17 @@ export default async function agentCreatePolicy(args, flags) {
   if (flags["deny-transfers"]) execPolicies.push("deny-transfers");
   if (flags["deny-approvals"]) execPolicies.push("deny-approvals");
   if (flags.allowlist) execPolicies.push("allowlist");
+  // Squad Treasury guard chain: quorum + daily cap + token/chain allowlist +
+  // time-window. Each reads its config from the squad sqlite file; one flag
+  // wires all four in the correct order.
+  if (flags.squad) {
+    execPolicies.push(
+      "quorum-required",
+      "daily-spend-limit",
+      "token-allowlist",
+      "time-window"
+    );
+  }
 
   if (execPolicies.length > 0) {
     // OWS supports one executable per policy — use a dispatcher

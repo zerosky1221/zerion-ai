@@ -1,15 +1,18 @@
 {
   "name": "zerion-cli",
   "version": "0.4.2",
-  "description": "Zerion for AI agents and developers: hosted MCP docs, wallet-analysis skill, and a JSON-first CLI.",
+  "description": "Zerion for AI agents and developers: hosted MCP docs, wallet-analysis skill, a JSON-first CLI, and the Squad Treasury multi-sig Telegram agent.",
   "author": "Zerion",
   "type": "module",
   "bin": {
-    "zerion": "./cli/zerion.js"
+    "zerion": "./cli/zerion.js",
+    "squad": "./squad/bin.js"
   },
   "files": [
     "cli/**/*.js",
     "cli/**/*.mjs",
+    "squad/**/*.js",
+    "squad/**/*.mjs",
     "README.md",
     "LICENSE"
   ],
@@ -17,6 +20,9 @@
     "test": "node --test tests/*.test.mjs",
     "test:unit": "node --test tests/unit.test.mjs tests/tool-catalog.test.mjs tests/examples.test.mjs tests/consistency.test.mjs",
     "test:integration": "node --test tests/integration.test.mjs",
+    "test:squad": "node --test squad/tests/*.test.mjs",
+    "squad": "node squad/bin.js",
+    "demo:squad": "node squad/demo.mjs",
     "prepublishOnly": "npm test"
   },
   "engines": {
@@ -45,6 +51,9 @@
     "@x402/evm": "^2.6.0",
     "@x402/fetch": "^2.6.0",
     "@x402/svm": "^2.8.0",
+    "better-sqlite3": "^11.3.0",
+    "grammy": "^1.30.0",
+    "node-cron": "^3.0.3",
     "qrcode-terminal": "^0.12.0",
     "viem": "^2.0.0"
   }

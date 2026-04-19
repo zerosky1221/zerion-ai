@@ -4,13 +4,22 @@
  */
 
 import { pathToFileURL, fileURLToPath } from "node:url";
-import { resolve, relative, dirname, join } from "node:path";
+import { resolve, relative, dirname, join, basename } from "node:path";
 import { getAgentToken, listAgentTokens, getPolicy, getWalletNameById } from "../wallet/keystore.js";
 import { getConfigValue } from "../config.js";
 import { printError } from "../util/output.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const POLICIES_DIR = resolve(join(__dirname, "..", "..", "policies"));
+
+// Squad Treasury's governance contract: these three scripts MUST be
+// attached to the active agent token or no signing is allowed. We check by
+// script basename rather than policy name so renames don't open holes.
+const REQUIRED_POLICY_SCRIPTS = new Set([
+  "quorum-required.mjs",
+  "daily-spend-limit.mjs",
+  "token-allowlist.mjs",
+]);
 
 /**
  * Require a valid agent token for trading execution.
@@ -48,7 +57,66 @@ export async function enforceExecutablePolicies(txInfo) {
       return wid && getWalletNameById(wid) === walletName;
     })
     .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))[0];
-  if (!activeKey?.policyIds?.length) return;
+
+  if (!activeKey) {
+    printError(
+      "no_agent_key",
+      "No agent token is bound to the default wallet — fail closed",
+      {
+        suggestion:
+          "Create and bind one: zerion agent create-token --name <name> --wallet <wallet> " +
+          "--policies quorum-required,daily-spend-limit,token-allowlist",
+      }
+    );
+    process.exit(1);
+  }
+
+  if (!activeKey.policyIds?.length) {
+    printError(
+      "no_policies_attached",
+      "Active agent token has no policies attached — fail closed",
+      {
+        suggestion:
+          "Required policies: quorum-required, daily-spend-limit, token-allowlist",
+      }
+    );
+    process.exit(1);
+  }
+
+  // Load every attached policy up-front so we can (a) verify the required
+  // squad policies are present, and (b) reuse them in the execution loop
+  // below without re-reading disk.
+  const loaded = [];
+  const attachedScripts = new Set();
+  for (const pid of activeKey.policyIds) {
+    let policy;
+    try {
+      policy = getPolicy(pid);
+    } catch {
+      printError("policy_unavailable", `Policy "${pid}" could not be loaded — blocking transaction`, {
+        suggestion: "Check policies: zerion agent list-policies",
+      });
+      process.exit(1);
+    }
+    for (const s of policy.config?.scripts || []) {
+      attachedScripts.add(basename(s));
+    }
+    loaded.push({ pid, policy });
+  }
+
+  for (const required of REQUIRED_POLICY_SCRIPTS) {
+    if (!attachedScripts.has(required)) {
+      printError(
+        "required_policy_missing",
+        `Required Squad policy script "${required}" is not attached — fail closed`,
+        {
+          suggestion:
+            `Attach all of: ${[...REQUIRED_POLICY_SCRIPTS].join(", ")} to the active agent token`,
+        }
+      );
+      process.exit(1);
+    }
+  }
 
   const ctx = {
     transaction: {
@@ -58,17 +126,7 @@ export async function enforceExecutablePolicies(txInfo) {
     },
   };
 
-  for (const pid of activeKey.policyIds) {
-    let policy;
-    try {
-      policy = getPolicy(pid);
-    } catch {
-      // Fail-closed: if a policy can't be loaded, block the transaction
-      printError("policy_unavailable", `Policy "${pid}" could not be loaded — blocking transaction`, {
-        suggestion: "Check policies: zerion agent list-policies",
-      });
-      process.exit(1);
-    }
+  for (const { pid, policy } of loaded) {
     const scripts = policy.config?.scripts || [];
     for (const script of scripts) {
       const resolved = resolve(script);

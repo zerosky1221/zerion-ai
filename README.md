@@ -1,18 +1,42 @@
 # zerion-ai
 
-**Maintained by Zerion.**
+**Maintained by Zerion. This fork adds Squad Treasury — a Telegram multi-sig
+agent built for the Zerion Frontier Hackathon.**
 
 `zerion-ai` is the public, self-contained repo for using Zerion from AI agents and developer tools.
 
-It packages two first-class integration paths:
+It packages three first-class integration paths:
 
 - **Hosted MCP** for Cursor, Claude, and other MCP-native agent environments
 - **`zerion`** for OpenClaw-like and command-based agent runtimes
+- **`squad`** ✨ – a Telegram-based multi-sig trading agent with scoped
+  policies (quorum, daily spend cap, token allowlist, time window). See
+  [squad/README.md](./squad/README.md).
 
 It ships two flagship workflows:
 
 - **`wallet-analysis`** — portfolio, positions, transactions, and PnL analysis (agent operation)
 - **`wallet-trading`** — swap, bridge, buy/sell tokens (agent operation); wallet setup, agent tokens, and policies (manual, requires passphrase)
+
+---
+
+## Squad Treasury (hackathon entry)
+
+A fork-and-extend of the Zerion CLI that turns a Telegram group into a
+policy-gated onchain treasury. Propose → vote → execute; every transaction
+runs through a four-policy guard chain before it is signed.
+
+```
+Telegram → proposal row → quorum → spawn `zerion swap …` with
+ZERION_PROPOSAL_ID → 4 policies re-verify from DB → real onchain tx
+```
+
+Start at [**squad/README.md**](./squad/README.md) for the full quickstart,
+architecture diagram, and command reference. Run the tests with
+`npm run test:squad` (19 assertions covering voting lifecycle + every policy
+branch).
+
+---
 
 ![Wallet analysis demo](./assets/demo-wallet-analysis.svg)
 

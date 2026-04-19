@@ -106,6 +106,8 @@ export async function getSwapQuote({
     fromChain,
     toChain: toChain || fromChain,
     slippageType: attrs.slippage_type,
+    walletAddress,
+    slippage: params.slippage_percent,
   };
 }
 
@@ -186,6 +188,43 @@ async function executeEvmSwap(quote, walletName, passphrase, zerionChainId, { ti
       throw err;
     }
 
+    // Zerion returns transaction data only once allowance is satisfied —
+    // the original quote was pre-approval, so refetch to get a signable tx.
+    // The Zerion indexer lags behind the chain by a few seconds after the
+    // approval tx confirms, so poll with retries until it's recognized.
+    if (!quote.transaction) {
+      const MAX_ATTEMPTS = 5;
+      const DELAY_MS = 3000;
+
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        process.stderr.write(
+          `[squad] Waiting for indexer to recognize approval (attempt ${attempt}/${MAX_ATTEMPTS})...\n`
+        );
+        await new Promise((r) => setTimeout(r, DELAY_MS));
+
+        const refreshed = await getSwapQuote({
+          fromToken: quote.from.symbol,
+          toToken: quote.to.symbol,
+          amount: quote.inputAmount,
+          fromChain: quote.fromChain,
+          toChain: quote.toChain,
+          walletAddress: quote.walletAddress,
+          slippage: quote.slippage,
+        });
+
+        if (refreshed.transaction) {
+          quote.transaction = refreshed.transaction;
+          quote.preconditions = refreshed.preconditions;
+          break;
+        }
+      }
+
+      if (!quote.transaction) {
+        throw new Error(
+          "Swap API did not recognize approval after 15 seconds. Please try again."
+        );
+      }
+    }
   }
 
   // 2. Sign the swap transaction

@@ -94,6 +94,7 @@ function printUsage() {
       "--deny-transfers": "Block raw ETH/native transfers",
       "--deny-approvals": "Block ERC-20 approval calls",
       "--allowlist <addresses>": "Only allow interaction with listed addresses",
+      "--squad": "Squad Treasury guard: quorum + daily cap + token allowlist + time window",
     },
     env: {
       "ZERION_API_KEY": "API key (get at dashboard.zerion.io)",
