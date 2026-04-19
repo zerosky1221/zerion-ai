@@ -276,13 +276,51 @@ const HELP_TEAM_TEXT =
   "/role voter|admin — reply (admin)\n" +
   "/cancel — abort wizard, or cancel a pending proposal (admin)";
 
+const LANDING_TEXT =
+  "<b>🛡 Squad Treasury</b>\n" +
+  "<i>Autonomous, policy-gated treasury agent for Zerion Frontier.</i>\n\n" +
+  "Built on top of the Zerion CLI — every onchain action flows through a " +
+  "fail-closed policy engine and a Telegram multisig.\n\n" +
+  "<b>How it works</b>\n" +
+  "• Members <code>/propose</code> a swap, bridge or send\n" +
+  "• Votes tally to quorum  <i>(default 2-of-N)</i>\n" +
+  "• CLI signs only if <b>every</b> policy script approves\n" +
+  "• Real tx on Base · BaseScan link posted back\n\n" +
+  "<b>Baked-in guarantees</b>\n" +
+  "🟢 Quorum-required  ·  🟢 Daily spend cap\n" +
+  "🟢 Token &amp; chain allowlist  ·  🟢 Fail-closed on DB outage\n" +
+  "🟢 Atomic reservation ledger  ·  🟢 No god-mode agent key\n\n" +
+  "<i>Add the bot to your squad chat and run /start inside the group to bootstrap.</i>";
+
+const SETUP_TEXT =
+  "<b>🛠 Setup guide</b>\n\n" +
+  "1. Create a group and add <b>Squad Treasury</b> as a member.\n" +
+  "2. <b>Inside the group</b>, run <code>/start</code> — the first caller becomes the founding admin.\n" +
+  "3. <code>/add_member</code> (reply to a teammate) to invite voters.\n" +
+  "4. <code>/policy</code> to review defaults  ·  <code>/policy set quorum N</code> to tune.\n" +
+  "5. <code>/propose</code> launches the interactive wizard — pick swap/bridge/send, token, chain, amount.\n" +
+  "6. Members tap 🟢 / 🔴 on the card until quorum is reached; the bot fires the Zerion CLI automatically.\n\n" +
+  "<i>Use /help inside the group for the full command reference.</i>";
+
+const HELP_TREASURY_TEXT =
+  "<b>Treasury</b>\n\n" +
+  "/wallet — treasury address &amp; Base balance\n" +
+  "/ledger — executed spend (paginated)\n" +
+  "/ping — health · bot, DB, policy engine\n\n" +
+  "<i>Tap any <code>value</code> in a message to copy it.</i>";
+
 function helpMainKb() {
   return {
-    inline_keyboard: [[
-      { text: "🗳 Trading", callback_data: "help:trading" },
-      { text: "🛡 Policy",  callback_data: "help:policy"  },
-      { text: "👥 Team",    callback_data: "help:team"    },
-    ]],
+    inline_keyboard: [
+      [
+        { text: "🗳 Trading",  callback_data: "help:trading"  },
+        { text: "🛡 Policy",   callback_data: "help:policy"   },
+      ],
+      [
+        { text: "👥 Team",     callback_data: "help:team"     },
+        { text: "💰 Treasury", callback_data: "help:treasury" },
+      ],
+    ],
   };
 }
 
@@ -292,10 +330,11 @@ function helpBackKb() {
 
 function helpSection(section) {
   switch (section) {
-    case "trading": return { text: HELP_TRADING_TEXT, kb: helpBackKb() };
-    case "policy":  return { text: HELP_POLICY_TEXT,  kb: helpBackKb() };
-    case "team":    return { text: HELP_TEAM_TEXT,    kb: helpBackKb() };
-    default:        return { text: HELP_MAIN_TEXT,    kb: helpMainKb() };
+    case "trading":  return { text: HELP_TRADING_TEXT,  kb: helpBackKb() };
+    case "policy":   return { text: HELP_POLICY_TEXT,   kb: helpBackKb() };
+    case "team":     return { text: HELP_TEAM_TEXT,     kb: helpBackKb() };
+    case "treasury": return { text: HELP_TREASURY_TEXT, kb: helpBackKb() };
+    default:         return { text: HELP_MAIN_TEXT,     kb: helpMainKb() };
   }
 }
 
@@ -900,6 +939,25 @@ export function buildBot() {
 
   // ---- /start & /help -----------------------------------------------------
   bot.command("start", async (ctx) => {
+    // Private DM → landing page (marketing / onboarding) for people who
+    // discover the bot before joining the squad group. The admin-bootstrap
+    // branch (ensureAtLeastOneAdmin) only runs inside the configured group,
+    // so this split never elevates DM users.
+    if (ctx.chat?.type === "private") {
+      const u = ctx.me.username;
+      const kb = {
+        inline_keyboard: [
+          [{ text: "➕ Add to group", url: `https://t.me/${u}?startgroup=true` }],
+          [
+            { text: "📖 Zerion CLI",   url: "https://github.com/zeriontech/zerion-ai" },
+            { text: "🛠 Setup guide",  callback_data: "dm:setup" },
+          ],
+          [{ text: "📘 Commands",      callback_data: "help:main" }],
+        ],
+      };
+      return ctx.reply(LANDING_TEXT, { ...HTML_NOPREV, reply_markup: kb });
+    }
+
     if (!checkChat(ctx)) return;
     const seeded = ensureAtLeastOneAdmin(ctx.from.id, ctx.from.username);
     if (seeded) {
@@ -926,6 +984,34 @@ export function buildBot() {
       ...HTML_NOPREV,
       reply_markup: helpMainKb(),
     });
+  });
+
+  // Bot added to a group → welcome + binding-status note. This instance is
+  // bound to a single chat (H1 — strict chat binding), so we still greet
+  // random groups but make it clear the bot is not operational there.
+  bot.on("message:new_chat_members", async (ctx) => {
+    const self = ctx.me.id;
+    const added = ctx.message.new_chat_members || [];
+    if (!added.some((u) => u.id === self)) return;
+    const hereId = String(ctx.chat.id);
+    const boundId = String(cfg.telegram.chatId);
+    if (hereId === boundId) {
+      await ctx.reply(
+        "<b>🛡 Squad Treasury online</b>\n" +
+          "<i>Fail-closed policy engine active.</i>\n\n" +
+          "Run <code>/start</code> to seed the founding admin, then <code>/help</code> for the command menu.",
+        HTML_NOPREV
+      );
+    } else {
+      await ctx.reply(
+        "<b>🛡 Squad Treasury</b>\n" +
+          "<i>Thanks for adding me — but this instance is bound to a different squad chat (strict chat-binding is a security guarantee).</i>\n\n" +
+          `Bound chat id: <code>${esc(boundId)}</code>\n` +
+          `This chat id:  <code>${esc(hereId)}</code>\n\n` +
+          "To run your own squad, deploy the bot with <code>TELEGRAM_CHAT_ID</code> set to this chat.",
+        HTML_NOPREV
+      );
+    }
   });
 
   // ---- membership ---------------------------------------------------------
@@ -1213,9 +1299,57 @@ export function buildBot() {
     }
   });
 
+  // ---- DM landing buttons ------------------------------------------------
+  bot.callbackQuery("dm:setup", async (ctx) => {
+    // Opened from the DM landing page — show the step-by-step onboarding.
+    // No chat-binding check: DM-only content, admin-bootstrap still gated by
+    // the strict checkChat inside /start.
+    if (ctx.chat?.type !== "private") return ctx.answerCallbackQuery();
+    try {
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        ctx.callbackQuery.message.message_id,
+        SETUP_TEXT,
+        { ...HTML_NOPREV, reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "dm:landing" }]] } }
+      );
+    } catch (err) {
+      console.error("[dm:setup] edit:", err?.description || err?.message);
+    }
+    await ctx.answerCallbackQuery();
+  });
+
+  bot.callbackQuery("dm:landing", async (ctx) => {
+    if (ctx.chat?.type !== "private") return ctx.answerCallbackQuery();
+    const u = ctx.me.username;
+    const kb = {
+      inline_keyboard: [
+        [{ text: "➕ Add to group", url: `https://t.me/${u}?startgroup=true` }],
+        [
+          { text: "📖 Zerion CLI",   url: "https://github.com/zeriontech/zerion-ai" },
+          { text: "🛠 Setup guide",  callback_data: "dm:setup" },
+        ],
+        [{ text: "📘 Commands",      callback_data: "help:main" }],
+      ],
+    };
+    try {
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        ctx.callbackQuery.message.message_id,
+        LANDING_TEXT,
+        { ...HTML_NOPREV, reply_markup: kb }
+      );
+    } catch (err) {
+      console.error("[dm:landing] edit:", err?.description || err?.message);
+    }
+    await ctx.answerCallbackQuery();
+  });
+
   // ---- help navigation ---------------------------------------------------
-  bot.callbackQuery(/^help:(main|trading|policy|team)$/, async (ctx) => {
-    if (!checkChat(ctx)) return ctx.answerCallbackQuery();
+  bot.callbackQuery(/^help:(main|trading|policy|team|treasury)$/, async (ctx) => {
+    // Help navigation is available both in DMs (landing-page "Setup Guide"
+    // may link here later) and the bound group — skip the strict chat check
+    // so private-chat browsing works, but still restrict to those two modes.
+    if (ctx.chat?.type !== "private" && !checkChat(ctx)) return ctx.answerCallbackQuery();
     const { text, kb } = helpSection(ctx.match[1]);
     try {
       await ctx.api.editMessageText(
